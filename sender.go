@@ -1,40 +1,53 @@
 package email
 
 import (
-	"crypto/tls"
+	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/gomail.v2"
 )
 
-// Mailer uses a google account to send email. Have to change account setting
-// at https://myaccount.google.com/u/2/lesssecureapps to make this Mailer work
-type Mailer struct {
+type Sender struct {
+	provider Provider
 	username string
 	password string
 	mailer   *gomail.Dialer
 }
 
-// NewMailer init a Mailer,
+// NewSender connects and sends a test email to SMTP server,
+// :arg provider: see `popular_providers.go`,
 // :arg username: string, example: "daominahpublic@gmail.com"
-func NewMailer(username string, password string) (*Mailer, error) {
-	mailer := gomail.NewDialer("smtp.gmail.com", 587, username, password)
-	mailer.TLSConfig = &tls.Config{InsecureSkipVerify: true}
-	result := &Mailer{
-		username: username,
-		password: password,
-		mailer:   mailer,
+func NewSender(provider Provider, username string, password string) (
+	*Sender, error) {
+	server, found := SendingServers[provider]
+	if !found {
+		return nil, errors.New("provider not found")
+	}
+	words := strings.Split(server, ":")
+	if len(words) < 2 {
+		return nil, errors.New("unexpected bad server address")
+	}
+	host, port := words[0], words[1]
+	portInt, _ := strconv.Atoi(port)
+	mailer := gomail.NewDialer(host, portInt, username, password)
+	mailer.TLSConfig = nil
+	//mailer.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+	ret := &Sender{
+		provider: provider, username: username, password: password,
+		mailer: mailer,
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	err := result.SendMail(username, "Test SendMail "+now, now)
+	err := ret.SendMail(username, "Test send mail at "+now, now)
 	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	return ret, nil
 }
 
-func (m Mailer) SendMail(targetEmail string, subject string, content string) error {
+func (m Sender) SendMail(targetEmail string, subject string, content string) error {
 	msg := gomail.NewMessage()
 	msg.SetHeader("From", m.username)
 	msg.SetHeader("To", targetEmail)

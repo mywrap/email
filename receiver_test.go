@@ -2,8 +2,9 @@ package email
 
 import (
 	"testing"
+	"time"
 
-	"github.com/emersion/go-imap"
+	imap "github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
 )
 
@@ -67,7 +68,7 @@ func TestReceiver(t *testing.T) {
 
 	t.Log("Last 4 messages:")
 	for msg := range messages {
-		t.Log("* " + msg.Envelope.Subject)
+		t.Log(time.Now().Format(time.RFC3339Nano) + " * " + msg.Envelope.Subject)
 	}
 
 	if err := <-done; err != nil {
