@@ -1,0 +1,13 @@
+# ides
+.idea
+.vscode
+
+
+# go testing, pprof output
+*.out
+*.test
+profile*.pdf
+
+
+# config file with real password
+*ignore*.sh
