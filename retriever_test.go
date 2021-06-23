@@ -1,6 +1,7 @@
 package email
 
 import (
+	"net/textproto"
 	"testing"
 	"time"
 
@@ -15,12 +16,20 @@ func TestReceiver(t *testing.T) {
 	}
 
 	fromDate, _ := time.Parse(time.RFC3339, "2020-01-01T12:00:00Z")
-	toDate, _ := time.Parse(time.RFC3339, "2021-06-24T12:00:00Z")
+	toDate, _ := time.Parse(time.RFC3339, "2021-06-23T12:00:00Z")
+	_ = textproto.MIMEHeader{}
 	seqNums, err := retriever.mailer.Search(&imap.SearchCriteria{
 		SentSince:  fromDate,
 		SentBefore: toDate,
+		//Header: textproto.MIMEHeader{
+		//	"From": []string{"daominahpublic@gmail.com"},
+		//},
+		Text: []string{"rồi"},
 	})
 	t.Log("seqNums: ", seqNums)
+	if len(seqNums) == 0 {
+		t.Fatal("empty search result")
+	}
 
 	seqSet := new(imap.SeqSet)
 	seqSet.AddNum(seqNums...)
