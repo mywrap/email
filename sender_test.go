@@ -10,8 +10,13 @@ func TestSender_GMail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	content0 := `
+		<h1>hello</h1>
+		<a href="http://127.0.0.1">localhost</a>
+		<pre>{"aww": "bii"}</pre>
+	`
 	err = sender.SendMail("daominahpublic@gmail.com",
-		"subject0", "content0")
+		"Test send HTML", TextHTML, content0)
 	if err != nil {
 		t.Error(err)
 	}

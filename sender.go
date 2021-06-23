@@ -40,22 +40,36 @@ func NewSender(provider Provider, username string, password string) (
 		mailer: mailer,
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	err := ret.SendMail(username, "Test send mail at "+now, now)
+	err := ret.SendMail(username, "Test send mail at "+now, TextPlain, now)
 	if err != nil {
 		return nil, err
 	}
 	return ret, nil
 }
 
-func (m Sender) SendMail(targetEmail string, subject string, content string) error {
+// SendMail sends an email,
+// :arg contentType: can be TextPlain or TextHTML
+func (m Sender) SendMail(targetEmail string,
+	subject string, contentType MIMEType, content string) error {
 	msg := gomail.NewMessage()
 	msg.SetHeader("From", m.username)
 	msg.SetHeader("To", targetEmail)
 	msg.SetHeader("Subject", subject)
-	msg.SetBody("text/plain", content)
+	msg.SetBody(string(contentType), content)
 	err := m.mailer.DialAndSend(msg)
 	if err != nil {
 		return fmt.Errorf("send %v to %v: %v", m.username, targetEmail, err)
 	}
 	return nil
 }
+
+// MIMEType stands for Multipurpose Internet Mail Extensions,
+// https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types,
+// this package only supports "text/plain" and "text/html"
+type MIMEType string
+
+// MIMEType enum
+const (
+	TextPlain MIMEType = "text/plain"
+	TextHTML  MIMEType = "text/html"
+)
