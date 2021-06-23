@@ -11,22 +11,18 @@ import (
 )
 
 type Sender struct {
-	provider Provider
-	username string
-	password string
-	mailer   *gomail.Dialer
+	providerAddrSMTP string
+	username         string
+	password         string
+	mailer           *gomail.Dialer
 }
 
 // NewSender connects and sends a test email to SMTP server,
-// :arg provider: see `popular_providers.go`,
-// :arg username: string, example: "daominahpublic@gmail.com"
-func NewSender(provider Provider, username string, password string) (
+// :arg providerAddrSMTP: example: "smtp.gmail.com:587", see `popular_providers.go` for more examples,
+// :arg username: example: "daominahpublic@gmail.com"
+func NewSender(providerAddrSMTP string, username string, password string) (
 	*Sender, error) {
-	server, found := SendingServers[provider]
-	if !found {
-		return nil, errors.New("provider not found")
-	}
-	words := strings.Split(server, ":")
+	words := strings.Split(providerAddrSMTP, ":")
 	if len(words) < 2 {
 		return nil, errors.New("unexpected bad server address")
 	}
@@ -36,7 +32,7 @@ func NewSender(provider Provider, username string, password string) (
 	mailer.TLSConfig = nil
 	//mailer.TLSConfig = &tls.Config{InsecureSkipVerify: true}
 	ret := &Sender{
-		provider: provider, username: username, password: password,
+		providerAddrSMTP: providerAddrSMTP, username: username, password: password,
 		mailer: mailer,
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)

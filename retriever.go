@@ -10,25 +10,20 @@ import (
 )
 
 type Retriever struct {
-	provider Provider
-	username string
-	password string
-	mailer   *client.Client
+	providerAddrIMAP string
+	username         string
+	password         string
+	mailer           *client.Client
 }
 
 // NewSender connects to IMAP server and tries to retrieve the last inbox,
-// :arg provider: see `popular_providers.go`,
+// :arg providerAddrIMAP: example: "imap.gmail.com:993", see `popular_providers.go` for more examples,
 // :arg username: string, example: "daominahpublic@gmail.com"
-func NewRetriever(provider Provider, username string, password string) (
+func NewRetriever(providerAddrIMAP string, username string, password string) (
 	*Retriever, error) {
-	server, found := RetrievingServers[provider]
-	if !found {
-		return nil, errors.New("provider not found")
-	}
-
 	var tlsConfig *tls.Config = nil
 	//var tlsConfig = &tls.Config{InsecureSkipVerify: true}
-	client0, err := client.DialTLS(server, tlsConfig)
+	client0, err := client.DialTLS(providerAddrIMAP, tlsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("client DialTLS: %v", err)
 	}
@@ -37,7 +32,7 @@ func NewRetriever(provider Provider, username string, password string) (
 		return nil, err
 	}
 	ret := &Retriever{
-		provider: provider, username: username, password: password,
+		providerAddrIMAP: providerAddrIMAP, username: username, password: password,
 		mailer: client0,
 	}
 
@@ -62,6 +57,6 @@ func NewRetriever(provider Provider, username string, password string) (
 	return ret, nil
 }
 
-func (m Sender) RetrieveMail() error {
+func (m Retriever) RetrieveMail() error {
 	return errors.New("not implemented")
 }

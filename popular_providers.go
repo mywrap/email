@@ -6,11 +6,11 @@ type Provider string
 
 // Provider enum
 const (
-	// Sender uses a google account to send email. Have to change account setting
-	// at https://myaccount.google.com/u/2/lesssecureapps to make this Sender work
-	GMail = "GMail"
+	// Google account have to change account setting at
+	// https://myaccount.google.com/u/2/lesssecureapps
+	GMail Provider = "GMail"
 
-	ZohoMail = "ZohoMail"
+	ZohoMail Provider = "ZohoMail"
 )
 
 // SendingServers maps provider to SMTP host:port

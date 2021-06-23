@@ -8,14 +8,14 @@ import (
 )
 
 func TestReceiver(t *testing.T) {
-	retriever, err := NewRetriever(GMail,
+	retriever, err := NewRetriever(RetrievingServers[GMail],
 		"daominahpublic@gmail.com", "HayQuen0*")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	fromDate, _ := time.Parse(time.RFC3339, "2020-01-01T12:00:00Z")
-	toDate, _ := time.Parse(time.RFC3339, "2021-06-4T12:00:00Z")
+	toDate, _ := time.Parse(time.RFC3339, "2021-06-24T12:00:00Z")
 	seqNums, err := retriever.mailer.Search(&imap.SearchCriteria{
 		SentSince:  fromDate,
 		SentBefore: toDate,

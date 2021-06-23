@@ -5,7 +5,7 @@ import (
 )
 
 func TestSender_GMail(t *testing.T) {
-	sender, err := NewSender(GMail,
+	sender, err := NewSender(SendingServers[GMail],
 		"daominahpublic@gmail.com", "HayQuen0*")
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +23,7 @@ func TestSender_GMail(t *testing.T) {
 }
 
 func TestSender_ZohoMail(t *testing.T) {
-	_, err := NewSender(ZohoMail,
+	_, err := NewSender(SendingServers[ZohoMail],
 		"84869433334a@zohomail.com", "HayQuen0*")
 	if err != nil {
 		t.Error(err)
