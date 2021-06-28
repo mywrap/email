@@ -133,6 +133,10 @@ func (r Retriever) RetrieveMails(filter SearchCriteria) ([]Message, error) {
 
 		if imapMsg.Envelope != nil {
 			msg.Date = imapMsg.Envelope.Date
+			if msg.Date.Before(filter.SentSince) {
+				continue
+			}
+
 			if len(imapMsg.Envelope.From) > 0 {
 				msg.From = imapMsg.Envelope.From[0].Address()
 			}

@@ -34,7 +34,31 @@ func TestReceiver(t *testing.T) {
 	if msg0.MainPartMIMEType != TextHTML {
 		t.Errorf("unexpected MainPartMIMEType: %v", msg0.MainPartMIMEType)
 	}
-	t.Logf("msg0: %v, %v", msg0.MIMEType, msg0.Body)
+	//t.Logf("msg0: %v, %v, %v", msg0.Date, msg0.MIMEType, msg0.Body)
+
+	t1, _ := time.Parse(time.RFC3339, "2021-05-11T13:16:00+07:00")
+	messages1, err1 := retriever.RetrieveMails(SearchCriteria{
+		From:      "noreply@zohoaccounts.com",
+		SentSince: t1,
+	})
+	if err1 != nil {
+		t.Fatal(err1)
+	}
+	if len(messages1) != 0 {
+		t.Fatalf("unexpected result1 len: real %v, expected %v", len(messages), 0)
+	}
+
+	t2, _ := time.Parse(time.RFC3339, "2021-05-11T13:15:00+07:00")
+	messages2, err2 := retriever.RetrieveMails(SearchCriteria{
+		From:      "noreply@zohoaccounts.com",
+		SentSince: t2,
+	})
+	if err2 != nil {
+		t.Fatal(err2)
+	}
+	if len(messages2) != 1 {
+		t.Fatalf("unexpected result2 len: real %v, expected %v", len(messages), 1)
+	}
 }
 
 func _TestReceiverDebug(t *testing.T) {
