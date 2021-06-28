@@ -10,6 +10,7 @@ import (
 	gomail "gopkg.in/gomail.v2"
 )
 
+// Sender wrapped a SMTP client
 type Sender struct {
 	providerAddrSMTP string
 	username         string

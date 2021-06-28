@@ -24,7 +24,7 @@ func TestSender_GMail(t *testing.T) {
 
 func TestSender_ZohoMail(t *testing.T) {
 	_, err := NewSender(SendingServers[ZohoMail],
-		"84869433334a@zohomail.com", "HayQuen0*")
+		"a84869433334@zohomail.com", "HayQuen0*")
 	if err != nil {
 		t.Error(err)
 	}
