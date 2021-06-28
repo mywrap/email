@@ -10,6 +10,7 @@ const (
 	// https://myaccount.google.com/u/2/lesssecureapps
 	GMail Provider = "GMail"
 
+	// need to enable IMAP on https://mail.zoho.com/zm/#settings/all/mailaccounts
 	ZohoMail Provider = "ZohoMail"
 )
 

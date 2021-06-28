@@ -1,6 +1,7 @@
 package email
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -20,49 +21,62 @@ type Retriever struct {
 	providerAddrIMAP string
 	username         string
 	password         string
-	mailer           *client.Client
+	clientInbox      *client.Client
+	clientSpam       *client.Client
 }
 
-// NewSender connects to IMAP server and tries to retrieve the last inbox,
+// NewSender connects to IMAP server then selects mail boxes,
 // :arg providerAddrIMAP: example: "imap.gmail.com:993", see `popular_providers.go` for more examples,
 // :arg username: string, example: "daominahpublic@gmail.com"
 func NewRetriever(providerAddrIMAP string, username string, password string) (
 	*Retriever, error) {
-	var tlsConfig *tls.Config = nil
-	//var tlsConfig = &tls.Config{InsecureSkipVerify: true}
-	client0, err := client.DialTLS(providerAddrIMAP, tlsConfig)
-	if err != nil {
-		return nil, fmt.Errorf("client DialTLS: %v", err)
-	}
-	//defer client0.Logout()
-	if err := client0.Login(username, password); err != nil {
-		return nil, err
-	}
 	ret := &Retriever{
-		providerAddrIMAP: providerAddrIMAP, username: username, password: password,
-		mailer: client0,
+		providerAddrIMAP: providerAddrIMAP,
+		username:         username,
+		password:         password,
 	}
+	for _, mailBoxPattern := range []string{"INBOX", "SPAM"} {
+		var tlsConfig *tls.Config = nil
+		//var tlsConfig = &tls.Config{InsecureSkipVerify: true}
+		client0, err := client.DialTLS(providerAddrIMAP, tlsConfig)
+		if err != nil {
+			return nil, fmt.Errorf("client DialTLS: %v", err)
+		}
+		if err := client0.Login(username, password); err != nil {
+			return nil, err
+		}
 
-	box0, err := client0.Select("INBOX", false)
-	if err != nil {
-		return nil, fmt.Errorf("client select INBOX: %v", err)
-	}
-	if box0.Messages <= 0 { // number of messages in the mail box
-		return ret, nil
-	}
-	from := box0.Messages - 1
-	msgIds := new(imap.SeqSet)
-	msgIds.AddRange(from, box0.Messages)
-	messages := make(chan *imap.Message, 10)
-	err = client0.Fetch(msgIds, []imap.FetchItem{imap.FetchEnvelope}, messages)
-	if err != nil {
-		return nil, fmt.Errorf("client test Fetch: %v", err)
-	}
-	for msg := range messages {
-		_ = msg.Envelope.Subject
-		//println("last inbox: ", msg.Envelope.Subject)
+		mailBoxes := make(chan *imap.MailboxInfo, 100)
+		err = client0.List("", "*", mailBoxes)
+		if err != nil {
+			return nil, fmt.Errorf("client list mail boxes: %v", err)
+		}
+		trueBox := mailBoxPattern
+		for mailBox := range mailBoxes {
+			if strings.Contains(strings.ToUpper(mailBox.Name), mailBoxPattern) {
+				trueBox = mailBox.Name
+				break
+			}
+		}
+		mailBoxStatus, err := client0.Select(trueBox, true)
+		if err != nil {
+			return nil, fmt.Errorf("client select mail box: %v", err)
+		}
+		_ = mailBoxStatus
+
+		if mailBoxPattern == "INBOX" {
+			ret.clientInbox = client0
+		} else {
+			ret.clientSpam = client0
+		}
 	}
 	return ret, nil
+}
+
+// CloseConnections tries to gracefully closes the connections
+func (r Retriever) CloseConnections() {
+	r.clientInbox.Logout()
+	r.clientSpam.Logout()
 }
 
 // SearchCriteria simplifies IMAP's search criteria format
@@ -84,6 +98,7 @@ type Message struct {
 	MainPartMIMEType MIMEType  // only support TextPlain or TextHTML
 }
 
+// RetrieveMails simplifies IMAP's fetch (from inbox and spam)
 func (r Retriever) RetrieveMails(filter SearchCriteria) ([]Message, error) {
 	search := &imap.SearchCriteria{}
 	if !filter.SentSince.IsZero() {
@@ -106,7 +121,7 @@ func (r Retriever) RetrieveMails(filter SearchCriteria) ([]Message, error) {
 		search.Text = []string{filter.Text}
 	}
 
-	seqNums, err := r.mailer.Search(search)
+	seqNums, err := r.clientInbox.Search(search)
 	if err != nil {
 		return nil, fmt.Errorf("imap search request failed: %v", err)
 	}
@@ -119,7 +134,7 @@ func (r Retriever) RetrieveMails(filter SearchCriteria) ([]Message, error) {
 	bodySection := &imap.BodySectionName{} // const
 	fetchItems := []imap.FetchItem{imap.FetchEnvelope, imap.FetchBody, bodySection.FetchItem()}
 	retChan := make(chan *imap.Message, len(seqNums))
-	err = r.mailer.Fetch(seqSet, fetchItems, retChan)
+	err = r.clientInbox.Fetch(seqSet, fetchItems, retChan)
 	if err != nil {
 		return nil, fmt.Errorf("imap fetch request failed: %v", err)
 	}
@@ -187,4 +202,11 @@ func (r Retriever) RetrieveMails(filter SearchCriteria) ([]Message, error) {
 		ret = append(ret, msg)
 	}
 	return ret, nil
+}
+
+// RetrieveNewMail periodically check inbox and spam until getting a new message
+// or the input context is cancelled
+func (r Retriever) RetrieveNewMail(
+	ctx context.Context, sender string, since time.Time) (Message, error) {
+	return Message{}, errors.New("not implemented")
 }

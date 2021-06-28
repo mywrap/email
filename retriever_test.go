@@ -12,8 +12,10 @@ import (
 )
 
 func TestReceiver(t *testing.T) {
-	retriever, err := NewRetriever(RetrievingServers[GMail],
-		"daominahpublic@gmail.com", "HayQuen0*")
+	provider0, username0, password0 := GMail, "daominahpublic@gmail.com", "HayQuen0*"
+	//provider0, username0, password0 := ZohoMail, "a84869433334@zohomail.com", "HayQuen0*"
+	retriever, err := NewRetriever(RetrievingServers[provider0],
+		username0, password0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +73,7 @@ func _TestReceiverDebug(t *testing.T) {
 	fromDate, _ := time.Parse(time.RFC3339, "2020-01-01T12:00:00Z")
 	toDate, _ := time.Parse(time.RFC3339, "2021-06-24T12:00:00Z")
 	_ = textproto.MIMEHeader{}
-	seqNums, _ := retriever.mailer.Search(&imap.SearchCriteria{
+	seqNums, _ := retriever.clientInbox.Search(&imap.SearchCriteria{
 		SentSince:  fromDate,
 		SentBefore: toDate,
 		Header: textproto.MIMEHeader{
@@ -93,7 +95,7 @@ func _TestReceiverDebug(t *testing.T) {
 	bodySection := &imap.BodySectionName{}
 	fetchItems := []imap.FetchItem{imap.FetchEnvelope, imap.FetchBody, bodySection.FetchItem()}
 	retChan := make(chan *imap.Message, len(seqNums))
-	err = retriever.mailer.Fetch(seqSet, fetchItems, retChan)
+	err = retriever.clientInbox.Fetch(seqSet, fetchItems, retChan)
 	if err != nil {
 		t.Fatal(err)
 	}
