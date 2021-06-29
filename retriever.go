@@ -154,7 +154,7 @@ func (r Retriever) retrieveMails(filter SearchCriteria, boxName MailBox) (
 		return nil, fmt.Errorf("invalid mail box name %v", boxName)
 	}
 	// feels like we need to reselect the mail box to get new message
-	_, err := boxClient.Select(r.boxNames[boxName], false)
+	_, err := boxClient.Select(r.boxNames[boxName], true)
 	if err != nil {
 		return nil, fmt.Errorf("select mail box: %v", err)
 	}
