@@ -12,6 +12,7 @@ import (
 )
 
 func TestReceiver(t *testing.T) {
+	beginT := time.Now()
 	provider0, username0, password0 := GMail, "daominahpublic@gmail.com", "HayQuen0*"
 	//provider0, username0, password0 := ZohoMail, "a84869433334@zohomail.com", "HayQuen0*"
 	retriever, err := NewRetriever(RetrievingServers[provider0],
@@ -19,6 +20,7 @@ func TestReceiver(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("initing retriever duration: %v", time.Since(beginT))
 
 	messages, err := retriever.RetrieveMails(SearchCriteria{
 		From: "noreply@zohoaccounts.com",
@@ -61,6 +63,22 @@ func TestReceiver(t *testing.T) {
 	if len(messages2) != 1 {
 		t.Fatalf("unexpected result2 len: real %v, expected %v", len(messages), 1)
 	}
+
+	t3, _ := time.Parse(time.RFC3339, "2021-06-07T00:00:00+07:00")
+	messages3, err3 := retriever.RetrieveMails(SearchCriteria{
+		SentSince:  t3,
+		SentBefore: t3.Add(24 * time.Hour),
+	})
+	t.Logf("messages3: %#v", messages3)
+	if err3 != nil {
+		t.Fatal(err3)
+	}
+	if len(messages3) != 1 {
+		t.Fatalf("unexpected result3 len: real %v, expected %v", len(messages), 1)
+	}
+	if messages3[0].MailBox != Spam {
+		t.Errorf("unexpected result3 mail box: real %v, expected %v", messages3[0].MailBox, Spam)
+	}
 }
 
 func _TestReceiverDebug(t *testing.T) {
@@ -69,11 +87,15 @@ func _TestReceiverDebug(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	inbox := retriever.mailBoxes[Inbox]
+	if inbox == nil {
+		t.Fatal("inbox client is nil")
+	}
 
 	fromDate, _ := time.Parse(time.RFC3339, "2020-01-01T12:00:00Z")
 	toDate, _ := time.Parse(time.RFC3339, "2021-06-24T12:00:00Z")
 	_ = textproto.MIMEHeader{}
-	seqNums, _ := retriever.clientInbox.Search(&imap.SearchCriteria{
+	seqNums, _ := inbox.Search(&imap.SearchCriteria{
 		SentSince:  fromDate,
 		SentBefore: toDate,
 		Header: textproto.MIMEHeader{
@@ -95,7 +117,7 @@ func _TestReceiverDebug(t *testing.T) {
 	bodySection := &imap.BodySectionName{}
 	fetchItems := []imap.FetchItem{imap.FetchEnvelope, imap.FetchBody, bodySection.FetchItem()}
 	retChan := make(chan *imap.Message, len(seqNums))
-	err = retriever.clientInbox.Fetch(seqSet, fetchItems, retChan)
+	err = inbox.Fetch(seqSet, fetchItems, retChan)
 	if err != nil {
 		t.Fatal(err)
 	}
