@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/textproto"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +31,23 @@ type Retriever struct {
 	// must be read only after inited because of simple lock
 	boxClients map[MailBox]*client.Client
 	mutex      *sync.Mutex // protect above 2 maps
+}
+
+// MailBox is a mail box regex to match provider mail box name,
+type MailBox string
+
+// MailBox enum
+const (
+	Inbox MailBox = "INBOX"
+	Spam  MailBox = "SPAM|BULK"
+)
+
+func (p MailBox) CheckMatch(mailBoxName string) bool {
+	regexObj, err := regexp.Compile("(?i)" + string(p))
+	if err != nil {
+		return false // should be unreachable
+	}
+	return regexObj.MatchString(mailBoxName)
 }
 
 // NewSender connects to IMAP server then selects mail boxes,
@@ -69,16 +87,15 @@ func NewRetriever(providerAddrIMAP string, username string, password string) (
 			}
 			mailBoxName := string(mailBoxPtn)
 			for mailBox := range mailBoxes {
-				//fmt.Printf("box name: %v\n", mailBox.Name)
-				if strings.Contains(strings.ToUpper(mailBox.Name),
-					strings.ToUpper(string(mailBoxPtn))) {
+				//fmt.Printf("debug pattern: %v, box name: %v\n", mailBoxPtn, mailBox.Name)
+				if mailBoxPtn.CheckMatch(mailBox.Name) {
 					mailBoxName = mailBox.Name
 					break
 				}
 			}
 			mailBoxStatus, err := client0.Select(mailBoxName, true)
 			if err != nil {
-				errsChan <- fmt.Errorf("select mail box: %v", err)
+				errsChan <- fmt.Errorf("select mail box %v: %v", mailBoxName, err)
 				return
 			}
 			_ = mailBoxStatus
@@ -95,6 +112,7 @@ func NewRetriever(providerAddrIMAP string, username string, password string) (
 			return nil, oneBoxErr
 		}
 	}
+	//fmt.Printf("debug boxNames: %#v\n", ret.boxNames)
 	return ret, nil
 }
 
@@ -127,15 +145,6 @@ type Message struct {
 	MainPartMIMEType MIMEType // only support TextPlain or TextHTML
 	MailBox          MailBox  // only support INBOX and SPAM
 }
-
-// MailBox is a mail box name
-type MailBox string
-
-// MailBox enum
-const (
-	Inbox MailBox = "INBOX"
-	Spam  MailBox = "SPAM"
-)
 
 // retrieveMails simplifies IMAP's fetch
 func (r Retriever) retrieveMails(filter SearchCriteria, boxName MailBox) (

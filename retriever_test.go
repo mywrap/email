@@ -15,10 +15,30 @@ import (
 	"github.com/emersion/go-message/mail"
 )
 
+func TestMailBox_CheckMatch(t *testing.T) {
+	type testCase struct {
+		pattern   MailBox
+		name      string
+		isMatched bool
+	}
+	for _, c := range []testCase{
+		{Inbox, "INBOX", true},
+		{Inbox, "Inbox", true},
+		{Inbox, "Archive", false},
+		{Spam, "INBOX", false},
+		{Spam, "SPAM", true},
+		{Spam, "Spam", true},
+		{Spam, "Bulk Mail", true},
+	} {
+		if c.pattern.CheckMatch(c.name) != c.isMatched {
+			t.Errorf("error MailBox CheckMatch: %#v", c)
+		}
+	}
+}
+
 func TestReceiver(t *testing.T) {
 	beginT := time.Now()
 	provider0, username0, password0 := GMail, "daominahpublic@gmail.com", "HayQuen0*"
-	//provider0, username0, password0 := ZohoMail, "a84869433334@zohomail.com", "HayQuen0*"
 	retriever, err := NewRetriever(RetrievingServers[provider0],
 		username0, password0)
 	if err != nil {
@@ -86,11 +106,17 @@ func TestReceiver(t *testing.T) {
 }
 
 func TestSendRetriever(t *testing.T) {
-	provider0, username0, password0 := GMail, "daominahpublic@gmail.com", "HayQuen0*"
+	provider0, username0, password0 := AOLMail, "a84869433334@aol.com", "qjjclmihhpwnpvnx"
+	//provider0, username0, password0 := GMail, "daominahpublic@gmail.com", "HayQuen0*"
+	//provider0, username0, password0 := ZohoMail, "a84869433334@zohomail.com", "HayQuen0*"
+
 	sender, err0 := NewSender(SendingServers[provider0], username0, password0)
+	if err0 != nil {
+		t.Fatalf("error NewSender: %v", err0)
+	}
 	retriever, err1 := NewRetriever(RetrievingServers[provider0], username0, password0)
-	if err0 != nil || err1 != nil {
-		t.Fatal(err0, err1)
+	if err1 != nil {
+		t.Fatalf("error NewRetriever: %v", err1)
 	}
 	_, _ = sender, retriever
 	beginT := time.Now()
@@ -102,7 +128,7 @@ func TestSendRetriever(t *testing.T) {
 		t.Logf("sent duration: %v, content0: %v", time.Since(beginT), content0)
 		sentChan <- true
 	}()
-	ctx, ccl := context.WithTimeout(context.Background(), 125*time.Second)
+	ctx, ccl := context.WithTimeout(context.Background(), 185*time.Second)
 	newMsg, err := retriever.RetrieveNewMail(ctx, SearchCriteria{
 		SentSince: beginT.Add(-1 * time.Minute),
 		From:      username0, Subject: "TestSendRetriever",
