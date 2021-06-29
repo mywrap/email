@@ -23,8 +23,13 @@ type Retriever struct {
 	username         string
 	password         string
 
-	mailBoxes map[MailBox]*client.Client // read only after inited
-	mutex     *sync.Mutex
+	// real mail box names on provider server,
+	// must be read only after inited because of simple lock
+	boxNames map[MailBox]string
+	// this retriever uses 1 connection per box,
+	// must be read only after inited because of simple lock
+	boxClients map[MailBox]*client.Client
+	mutex      *sync.Mutex // protect above 2 maps
 }
 
 // NewSender connects to IMAP server then selects mail boxes,
@@ -36,7 +41,8 @@ func NewRetriever(providerAddrIMAP string, username string, password string) (
 		providerAddrIMAP: providerAddrIMAP,
 		username:         username,
 		password:         password,
-		mailBoxes:        make(map[MailBox]*client.Client),
+		boxNames:         make(map[MailBox]string),
+		boxClients:       make(map[MailBox]*client.Client),
 		mutex:            &sync.Mutex{},
 	}
 	boxesToFetch := []MailBox{Inbox, Spam}
@@ -72,12 +78,13 @@ func NewRetriever(providerAddrIMAP string, username string, password string) (
 			}
 			mailBoxStatus, err := client0.Select(mailBoxName, true)
 			if err != nil {
-				errsChan <- fmt.Errorf("client select mail box: %v", err)
+				errsChan <- fmt.Errorf("select mail box: %v", err)
 				return
 			}
 			_ = mailBoxStatus
 			ret.mutex.Lock()
-			ret.mailBoxes[mailBoxPtn] = client0
+			ret.boxNames[mailBoxPtn] = mailBoxName
+			ret.boxClients[mailBoxPtn] = client0
 			ret.mutex.Unlock()
 			errsChan <- nil
 		}()
@@ -93,7 +100,7 @@ func NewRetriever(providerAddrIMAP string, username string, password string) (
 
 // CloseConnections tries to gracefully closes the connections
 func (r Retriever) CloseConnections() {
-	for _, cli := range r.mailBoxes {
+	for _, cli := range r.boxClients {
 		cli.Logout()
 	}
 }
@@ -133,9 +140,21 @@ const (
 // retrieveMails simplifies IMAP's fetch
 func (r Retriever) retrieveMails(filter SearchCriteria, boxName MailBox) (
 	[]Message, error) {
+	boxClient := r.boxClients[boxName]
+	if boxClient == nil {
+		return nil, fmt.Errorf("invalid mail box name %v", boxName)
+	}
+	// feels like we need to reselect the mail box to get new message
+	_, err := boxClient.Select(r.boxNames[boxName], false)
+	if err != nil {
+		return nil, fmt.Errorf("select mail box: %v", err)
+	}
+
 	search := &imap.SearchCriteria{}
 	if !filter.SentSince.IsZero() {
-		search.SentSince = filter.SentSince
+		// IMAP's search specs disregards time so this filter should be excess,
+		// we will filter by time for each message later
+		search.SentSince = filter.SentSince.Add(-24 * time.Hour)
 	}
 	if !filter.SentBefore.IsZero() {
 		search.SentBefore = filter.SentBefore
@@ -154,11 +173,7 @@ func (r Retriever) retrieveMails(filter SearchCriteria, boxName MailBox) (
 		search.Text = []string{filter.Text}
 	}
 
-	mailBox := r.mailBoxes[boxName]
-	if mailBox == nil {
-		return nil, fmt.Errorf("invalid mail box name %v", boxName)
-	}
-	seqNums, err := mailBox.Search(search)
+	seqNums, err := boxClient.Search(search)
 	if err != nil {
 		return nil, fmt.Errorf("imap search request failed: %v", err)
 	}
@@ -166,7 +181,7 @@ func (r Retriever) retrieveMails(filter SearchCriteria, boxName MailBox) (
 		return nil, nil
 	}
 	if len(seqNums) > 1000 { // just for safe, input query should limit date range
-		seqNums = seqNums[:1000]
+		seqNums = seqNums[len(seqNums)-1000:]
 	}
 	seqSet := new(imap.SeqSet)
 	seqSet.AddNum(seqNums...)
@@ -174,7 +189,7 @@ func (r Retriever) retrieveMails(filter SearchCriteria, boxName MailBox) (
 	bodySection := &imap.BodySectionName{} // const
 	fetchItems := []imap.FetchItem{imap.FetchEnvelope, imap.FetchBody, bodySection.FetchItem()}
 	imapMessages := make(chan *imap.Message, len(seqNums))
-	err = mailBox.Fetch(seqSet, fetchItems, imapMessages)
+	err = boxClient.Fetch(seqSet, fetchItems, imapMessages)
 	if err != nil {
 		return nil, fmt.Errorf("imap fetch request failed: %v", err)
 	}
@@ -191,6 +206,8 @@ func (r Retriever) retrieveMails(filter SearchCriteria, boxName MailBox) (
 				msg.From = imapMsg.Envelope.From[0].Address()
 			}
 			msg.Subject = imapMsg.Envelope.Subject
+		}
+		if imapMsg.BodyStructure != nil {
 			msg.MIMEType = MIMEType(fmt.Sprintf("%v/%v",
 				imapMsg.BodyStructure.MIMEType, imapMsg.BodyStructure.MIMESubType))
 		}
@@ -241,9 +258,9 @@ func (r Retriever) retrieveMails(filter SearchCriteria, boxName MailBox) (
 
 // retrieveMails simplifies IMAP's fetch (from inbox and spam)
 func (r Retriever) RetrieveMails(filter SearchCriteria) ([]Message, error) {
-	retChan := make(chan []Message, len(r.mailBoxes))
-	errChan := make(chan error, len(r.mailBoxes))
-	for boxName, _ := range r.mailBoxes {
+	retChan := make(chan []Message, len(r.boxClients))
+	errChan := make(chan error, len(r.boxClients))
+	for boxName, _ := range r.boxClients {
 		boxName := boxName
 		go func() {
 			msgs, err := r.retrieveMails(filter, boxName)
@@ -251,14 +268,14 @@ func (r Retriever) RetrieveMails(filter SearchCriteria) ([]Message, error) {
 			errChan <- err
 		}()
 	}
-	for i := 0; i < len(r.mailBoxes); i++ {
+	for i := 0; i < len(r.boxClients); i++ {
 		oneBoxErr := <-errChan
 		if oneBoxErr != nil {
 			return nil, oneBoxErr
 		}
 	}
 	ret := make([]Message, 0)
-	for i := 0; i < len(r.mailBoxes); i++ {
+	for i := 0; i < len(r.boxClients); i++ {
 		oneBoxMsgs := <-retChan
 		ret = append(ret, oneBoxMsgs...)
 	}
@@ -268,6 +285,35 @@ func (r Retriever) RetrieveMails(filter SearchCriteria) ([]Message, error) {
 // RetrieveNewMail periodically check inbox and spam until getting a new message
 // or the input context is cancelled
 func (r Retriever) RetrieveNewMail(
-	ctx context.Context, sender string, since time.Time) (Message, error) {
-	return Message{}, errors.New("not implemented")
+	ctx context.Context, filter SearchCriteria) (Message, error) {
+	var lastErr error
+	for i := 0; true; i++ {
+		if i > 0 {
+			time.Sleep(10 * time.Second)
+		}
+		select {
+		case <-ctx.Done():
+			if lastErr == nil {
+				lastErr = ctx.Err()
+			}
+			return Message{}, lastErr
+		default:
+			// continue to check inbox
+		}
+		msgs, err := r.RetrieveMails(filter)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if len(msgs) == 0 {
+			continue
+		}
+
+		//for _, m := range msgs {
+		//	fmt.Printf("debug msg %v: %v\n", m.Date, m.Body)
+		//}
+
+		return msgs[len(msgs)-1], nil
+	}
+	return Message{}, errors.New("unreachable")
 }

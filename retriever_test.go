@@ -1,9 +1,13 @@
 package email
 
 import (
+	"context"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/textproto"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,7 +73,7 @@ func TestReceiver(t *testing.T) {
 		SentSince:  t3,
 		SentBefore: t3.Add(24 * time.Hour),
 	})
-	t.Logf("messages3: %#v", messages3)
+	//t.Logf("messages3: %#v", messages3)
 	if err3 != nil {
 		t.Fatal(err3)
 	}
@@ -81,13 +85,46 @@ func TestReceiver(t *testing.T) {
 	}
 }
 
+func TestSendRetriever(t *testing.T) {
+	provider0, username0, password0 := GMail, "daominahpublic@gmail.com", "HayQuen0*"
+	sender, err0 := NewSender(SendingServers[provider0], username0, password0)
+	retriever, err1 := NewRetriever(RetrievingServers[provider0], username0, password0)
+	if err0 != nil || err1 != nil {
+		t.Fatal(err0, err1)
+	}
+	_, _ = sender, retriever
+	beginT := time.Now()
+	rand.Seed(time.Now().UnixNano())
+	content0 := fmt.Sprintf("%06d", rand.Intn(1000000))
+	sentChan := make(chan bool)
+	go func() {
+		sender.SendMail(username0, "TestSendRetriever", TextPlain, content0)
+		t.Logf("sent duration: %v, content0: %v", time.Since(beginT), content0)
+		sentChan <- true
+	}()
+	ctx, ccl := context.WithTimeout(context.Background(), 125*time.Second)
+	newMsg, err := retriever.RetrieveNewMail(ctx, SearchCriteria{
+		SentSince: beginT.Add(-1 * time.Minute),
+		From:      username0, Subject: "TestSendRetriever",
+	})
+	ccl()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("retrieved duration: %v", time.Since(beginT))
+	<-sentChan
+	if strings.TrimSpace(newMsg.Body) != content0 {
+		t.Errorf("error RetrieveNewMail: real: %v, expected: %v", newMsg.Body, content0)
+	}
+}
+
 func _TestReceiverDebug(t *testing.T) {
 	retriever, err := NewRetriever(RetrievingServers[GMail],
 		"daominahpublic@gmail.com", "HayQuen0*")
 	if err != nil {
 		t.Fatal(err)
 	}
-	inbox := retriever.mailBoxes[Inbox]
+	inbox := retriever.boxClients[Inbox]
 	if inbox == nil {
 		t.Fatal("inbox client is nil")
 	}

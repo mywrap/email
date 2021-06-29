@@ -37,7 +37,7 @@ func NewSender(providerAddrSMTP string, username string, password string) (
 		mailer: mailer,
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	err := ret.SendMail(username, "Test send mail at "+now, TextPlain, now)
+	err := ret.SendMail(username, "initing Sender test "+now, TextPlain, now)
 	if err != nil {
 		return nil, err
 	}
@@ -45,6 +45,8 @@ func NewSender(providerAddrSMTP string, username string, password string) (
 }
 
 // SendMail sends an email,
+// this func opens a connection, sends the given emails and closes the connection,
+// TODO: consider to reuse a persistent connection,
 // :arg contentType: can be TextPlain or TextHTML
 func (m Sender) SendMail(targetEmail string,
 	subject string, contentType MIMEType, content string) error {
